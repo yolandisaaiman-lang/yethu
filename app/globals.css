@@ -1,8 +1,11 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #090a0c;
+  --foreground: #f8fafc;
+  --primary-amber: #f59e0b;
+  --primary-terracotta: #ea580c;
+  --primary-emerald: #10b981;
 }
 
 @theme inline {
@@ -12,15 +15,89 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+body {
+  background-color: #090a0c;
+  color: #f8fafc;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  overflow-x: hidden;
+  selection-background-color: #f59e0b;
+  selection-color: #090a0c;
+}
+
+/* Custom glowing borders & gradients */
+.african-sunset-gradient {
+  background: linear-gradient(135deg, #ea580c 0%, #f59e0b 50%, #d97706 100%);
+}
+
+.african-sunset-text {
+  background: linear-gradient(135deg, #fb923c 0%, #f59e0b 40%, #fbbf24 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.emerald-pulse-gradient {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.glass-card {
+  background: rgba(18, 20, 26, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-card-hover {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card-hover:hover {
+  transform: translateY(-4px);
+  border-color: rgba(245, 158, 11, 0.35);
+  box-shadow: 0 12px 30px -10px rgba(234, 88, 12, 0.2);
+}
+
+/* Pulse animation for 120s timer & live badge */
+@keyframes urgent-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 0.85;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.animate-urgent {
+  animation: urgent-pulse 1.2s infinite ease-in-out;
+}
+
+@keyframes live-ping {
+  75%, 100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+.animate-live-ping {
+  animation: live-ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* Custom modern scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #090a0c;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #262933;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #f59e0b;
 }
