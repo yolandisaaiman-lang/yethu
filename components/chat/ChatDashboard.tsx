@@ -52,9 +52,6 @@ export default function ChatDashboard() {
   useEffect(() => {
     if (!user) return;
 
-    // Seed welcome invite if brand new user
-    contactInviteService.seedWelcomeInvite(user.id, user.handle);
-
     const loadInvites = () => {
       const invs = contactInviteService.getPendingInvitesForUser(user.id, user.handle);
       setPendingInvites(invs);

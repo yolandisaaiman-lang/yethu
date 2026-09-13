@@ -4,6 +4,7 @@ export interface DiscoverableContact {
   id: string;
   name: string;
   handle: string;
+  email?: string;
   avatar: string;
   country: string;
   countryCode: string;
@@ -30,95 +31,30 @@ export interface ChatInvite {
 }
 
 const LOCAL_STORAGE_INVITES_KEY = 'yethu_chat_invites_v1';
+const LOCAL_STORAGE_ACCOUNTS_KEY = 'yethu_registered_accounts_v1';
 const INVITES_BROADCAST_CHANNEL = 'yethu_realtime_invites';
 
-// Curated African creator directory for discovery
-export const DISCOVERABLE_CONTACTS: DiscoverableContact[] = [
-  {
-    id: 'themba',
-    name: 'Themba Khumalo',
-    handle: '@themba_beats',
-    avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=120&auto=format&fit=crop&q=80',
-    country: 'South Africa',
-    countryCode: 'ZA',
-    countryFlag: '🇿🇦',
-    language: 'isiZulu',
-    bio: 'Amapiano producer, sound designer & live 120s host from Soweto.',
-    isCreator: true,
-  },
-  {
-    id: 'kofi',
-    name: 'Kofi Mensah',
-    handle: '@kofi_accra',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80',
-    country: 'Ghana',
-    countryCode: 'GH',
-    countryFlag: '🇬🇭',
-    language: 'Twi / English',
-    bio: 'Tech founder & Highlife broadcast streamer in Accra.',
-    isCreator: true,
-  },
-  {
-    id: 'amara',
-    name: 'Amara Balogun',
-    handle: '@amara_lagos',
-    avatar: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=120&auto=format&fit=crop&q=80',
-    country: 'Nigeria',
-    countryCode: 'NG',
-    countryFlag: '🇳🇬',
-    language: 'Yorùbá',
-    bio: 'Lagos creative arts director, Afro-fusion storyteller.',
-    isCreator: true,
-  },
-  {
-    id: 'fatou',
-    name: 'Fatou Diop',
-    handle: '@fatou_dakar',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
-    country: 'Senegal',
-    countryCode: 'SN',
-    countryFlag: '🇸🇳',
-    language: 'Wolof / Français',
-    bio: 'Dakar contemporary fashion designer & culture host.',
-    isCreator: true,
-  },
-  {
-    id: 'juma',
-    name: 'Juma Kimani',
-    handle: '@juma_ke',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop&q=80',
-    country: 'Kenya',
-    countryCode: 'KE',
-    countryFlag: '🇰🇪',
-    language: 'Kiswahili',
-    bio: 'Silicon Savannah WebRTC engineer & Nairobi community leader.',
-    isCreator: true,
-  },
-  {
-    id: 'zola',
-    name: 'Zola Ndlovu',
-    handle: '@zola_dbn',
-    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=120&auto=format&fit=crop&q=80',
-    country: 'South Africa',
-    countryCode: 'ZA',
-    countryFlag: '🇿🇦',
-    language: 'isiXhosa',
-    bio: 'Durban coastal music and dance creator.',
-    isCreator: true,
-  },
-  {
-    id: 'aline',
-    name: 'Aline Uwase',
-    handle: '@aline_kgl',
-    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=120&auto=format&fit=crop&q=80',
-    country: 'Rwanda',
-    countryCode: 'RW',
-    countryFlag: '🇷🇼',
-    language: 'Kinyarwanda',
-    bio: 'Kigali digital innovation advocate and media creator.',
-    isCreator: true,
-  },
-];
+// List of legacy mock IDs to strip out
+const FAKE_ACCOUNT_IDS = new Set(['themba', 'kofi', 'amara', 'fatou', 'juma', 'zola', 'aline']);
+
+function getCountryFlag(countryCode?: string): string {
+  switch (countryCode?.toUpperCase()) {
+    case 'ZA':
+      return '🇿🇦';
+    case 'NG':
+      return '🇳🇬';
+    case 'KE':
+      return '🇰🇪';
+    case 'GH':
+      return '🇬🇭';
+    case 'SN':
+      return '🇸🇳';
+    case 'RW':
+      return '🇷🇼';
+    default:
+      return '🌍';
+  }
+}
 
 export type InviteEvent =
   | { type: 'INVITE_RECEIVED'; invite: ChatInvite }
@@ -177,7 +113,11 @@ class ContactInviteService {
     try {
       const item = localStorage.getItem(LOCAL_STORAGE_INVITES_KEY);
       if (item) {
-        return JSON.parse(item);
+        const parsed: ChatInvite[] = JSON.parse(item);
+        // Filter out legacy mock accounts so only real user invites appear
+        return parsed.filter(
+          (inv) => !FAKE_ACCOUNT_IDS.has(inv.senderId) && !FAKE_ACCOUNT_IDS.has(inv.recipientId)
+        );
       }
     } catch (e) {
       console.warn('Error reading invites:', e);
@@ -188,7 +128,10 @@ class ContactInviteService {
   private saveAllInvites(invites: ChatInvite[]) {
     if (typeof window === 'undefined') return;
     try {
-      localStorage.setItem(LOCAL_STORAGE_INVITES_KEY, JSON.stringify(invites));
+      const cleaned = invites.filter(
+        (inv) => !FAKE_ACCOUNT_IDS.has(inv.senderId) && !FAKE_ACCOUNT_IDS.has(inv.recipientId)
+      );
+      localStorage.setItem(LOCAL_STORAGE_INVITES_KEY, JSON.stringify(cleaned));
     } catch (e) {
       console.warn('Error saving invites:', e);
     }
@@ -243,13 +186,6 @@ class ContactInviteService {
       invite: newInvite,
     });
 
-    // Auto-respond simulation if inviting a registered creator
-    if (['themba', 'kofi', 'amara', 'fatou', 'juma', 'zola', 'aline'].includes(params.recipientId)) {
-      setTimeout(() => {
-        this.acceptInvite(newInvite.id);
-      }, 4000);
-    }
-
     return newInvite;
   }
 
@@ -285,51 +221,102 @@ class ContactInviteService {
     return true;
   }
 
-  public searchContacts(query: string, currentUserId?: string): DiscoverableContact[] {
-    const cleanQuery = query.toLowerCase().trim();
-    return DISCOVERABLE_CONTACTS.filter((contact) => {
-      if (currentUserId && contact.id === currentUserId) return false;
-      if (!cleanQuery) return true;
-      return (
-        contact.name.toLowerCase().includes(cleanQuery) ||
-        contact.handle.toLowerCase().includes(cleanQuery) ||
-        contact.country.toLowerCase().includes(cleanQuery) ||
-        contact.language.toLowerCase().includes(cleanQuery) ||
-        contact.bio.toLowerCase().includes(cleanQuery)
-      );
+  /**
+   * Search real authenticated users registered in InsForge BaaS and local registry.
+   * Excludes fake demo accounts and the current user.
+   */
+  public async searchContacts(
+    query: string,
+    currentUserId?: string,
+    currentUserEmail?: string
+  ): Promise<DiscoverableContact[]> {
+    const cleanQuery = query.toLowerCase().trim().replace(/^@/, '');
+    const foundMap = new Map<string, DiscoverableContact>();
+
+    // 1. Fetch real authenticated users from InsForge via our server API route
+    try {
+      const qParam = cleanQuery ? `?q=${encodeURIComponent(cleanQuery)}` : '';
+      const uidParam = currentUserId ? `&currentUserId=${encodeURIComponent(currentUserId)}` : '';
+      const emailParam = currentUserEmail ? `&currentUserEmail=${encodeURIComponent(currentUserEmail)}` : '';
+      const queryStr = cleanQuery
+        ? `${qParam}${uidParam}${emailParam}`
+        : `?${(uidParam + emailParam).replace(/^&/, '')}`;
+
+      const res = await fetch(`/api/users/search${queryStr}`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data?.users)) {
+          data.users.forEach((u: DiscoverableContact) => {
+            if (!FAKE_ACCOUNT_IDS.has(u.id)) {
+              foundMap.set(u.id, u);
+            }
+          });
+        }
+      }
+    } catch (apiErr) {
+      console.warn('InsForge API search notice (combining with local real registry):', apiErr);
+    }
+
+    // 2. Also check local registered accounts from this device/browser
+    if (typeof window !== 'undefined') {
+      try {
+        const rawAccounts = localStorage.getItem(LOCAL_STORAGE_ACCOUNTS_KEY);
+        if (rawAccounts) {
+          const accounts = JSON.parse(rawAccounts);
+          Object.values(accounts).forEach((entry: any) => {
+            const u = entry?.user;
+            if (!u || !u.id || FAKE_ACCOUNT_IDS.has(u.id)) return;
+            if (currentUserId && u.id === currentUserId) return;
+            if (currentUserEmail && u.email?.toLowerCase() === currentUserEmail.toLowerCase()) return;
+
+            const contact: DiscoverableContact = {
+              id: u.id,
+              name: u.name || u.email?.split('@')[0] || 'Yethu User',
+              handle: u.handle?.startsWith('@') ? u.handle : `@${u.handle || u.name.toLowerCase().replace(/\s+/g, '_')}`,
+              email: u.email,
+              avatar: u.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
+              country: u.country || 'South Africa',
+              countryCode: u.countryCode || 'ZA',
+              countryFlag: getCountryFlag(u.countryCode || 'ZA'),
+              language: u.nativeLanguage ? `${u.nativeLanguage} / English` : 'isiXhosa / English',
+              bio: u.bio || 'Afropolitan creator on Yethu Live.',
+              isCreator: u.isCreator !== false,
+            };
+
+            // If already present from InsForge, enrich with local rich metadata
+            if (foundMap.has(u.id)) {
+              foundMap.set(u.id, { ...foundMap.get(u.id)!, ...contact });
+            } else {
+              // Match search query
+              if (!cleanQuery) {
+                foundMap.set(u.id, contact);
+              } else {
+                const matchName = contact.name.toLowerCase().includes(cleanQuery);
+                const matchHandle = contact.handle.toLowerCase().replace('@', '').includes(cleanQuery);
+                const matchEmail = contact.email?.toLowerCase().includes(cleanQuery);
+                const matchCountry = contact.country.toLowerCase().includes(cleanQuery);
+                const matchLanguage = contact.language.toLowerCase().includes(cleanQuery);
+                if (matchName || matchHandle || matchEmail || matchCountry || matchLanguage) {
+                  foundMap.set(u.id, contact);
+                }
+              }
+            }
+          });
+        }
+      } catch (localErr) {
+        console.warn('Error reading local accounts:', localErr);
+      }
+    }
+
+    return Array.from(foundMap.values()).filter((c) => {
+      if (currentUserId && c.id === currentUserId) return false;
+      if (currentUserEmail && c.email?.toLowerCase() === currentUserEmail.toLowerCase()) return false;
+      return true;
     });
   }
 
-  public seedWelcomeInvite(userId: string, userHandle: string) {
-    const existing = this.getAllInvites();
-    const hasExisting = existing.some((i) => i.recipientId === userId || i.recipientHandle === userHandle);
-    if (hasExisting) return;
-
-    const welcomeInvite: ChatInvite = {
-      id: 'inv_welcome_' + Date.now(),
-      senderId: 'themba',
-      senderName: 'Themba Khumalo',
-      senderHandle: '@themba_beats',
-      senderAvatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=120&auto=format&fit=crop&q=80',
-      senderCountryFlag: '🇿🇦',
-      senderCountry: 'South Africa',
-      senderLanguage: 'isiZulu',
-      recipientId: userId,
-      recipientHandle: userHandle,
-      status: 'pending',
-      greeting: 'Sawubona! Welcome to Yethu. Would love to connect and share some 120s studio live streams with you!',
-      createdAt: new Date().toISOString(),
-    };
-
-    existing.unshift(welcomeInvite);
-    this.saveAllInvites(existing);
-
-    setTimeout(() => {
-      this.broadcast({
-        type: 'INVITE_RECEIVED',
-        invite: welcomeInvite,
-      });
-    }, 800);
+  public seedWelcomeInvite(_userId: string, _userHandle: string) {
+    // No-op: Removed fake accounts and welcome invites
   }
 }
 

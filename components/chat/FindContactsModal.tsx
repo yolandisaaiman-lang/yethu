@@ -1,10 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import {
   contactInviteService,
-  DISCOVERABLE_CONTACTS,
   DiscoverableContact,
 } from '@/lib/contactInviteService';
 import {
@@ -18,6 +17,7 @@ import {
   ShieldCheck,
   Send,
   MessageSquare,
+  Loader2,
 } from 'lucide-react';
 
 interface FindContactsModalProps {
@@ -37,10 +37,40 @@ export default function FindContactsModal({
   const [inviteGreetingMap, setInviteGreetingMap] = useState<Record<string, string>>({});
   const [sentInvitesMap, setSentInvitesMap] = useState<Record<string, boolean>>({});
   const [activeInviteContact, setActiveInviteContact] = useState<DiscoverableContact | null>(null);
+  const [contacts, setContacts] = useState<DiscoverableContact[]>([]);
+  const [isLoadingContacts, setIsLoadingContacts] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let isMounted = true;
+    setIsLoadingContacts(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const results = await contactInviteService.searchContacts(
+          searchQuery,
+          user?.id,
+          user?.email
+        );
+        if (isMounted) {
+          setContacts(results);
+          setIsLoadingContacts(false);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setIsLoadingContacts(false);
+        }
+      }
+    }, 200);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [isOpen, searchQuery, user?.id, user?.email]);
 
   if (!isOpen) return null;
-
-  const contacts = contactInviteService.searchContacts(searchQuery, user?.id);
 
   const filteredContacts = contacts.filter((c) => {
     if (selectedCountry === 'all') return true;
@@ -157,9 +187,26 @@ export default function FindContactsModal({
 
         {/* Contacts Directory List */}
         <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-          {filteredContacts.length === 0 ? (
-            <div className="text-center py-12 text-zinc-500 text-xs">
-              No contacts found matching your query.
+          {isLoadingContacts ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-zinc-400 text-xs">
+              <Loader2 className="h-6 w-6 animate-spin text-amber-400" />
+              <span>Searching real authenticated Yethu accounts...</span>
+            </div>
+          ) : filteredContacts.length === 0 ? (
+            <div className="text-center py-14 px-4 text-xs space-y-2">
+              <div className="flex justify-center mb-2">
+                <div className="h-10 w-10 rounded-full bg-zinc-900 border border-white/10 flex items-center justify-center text-zinc-500">
+                  <Search className="h-4 w-4" />
+                </div>
+              </div>
+              <p className="font-semibold text-zinc-300">
+                {searchQuery
+                  ? `No real user found matching "${searchQuery}"`
+                  : 'No other real accounts found yet'}
+              </p>
+              <p className="text-zinc-500 max-w-sm mx-auto">
+                Search for real users by their full name (e.g. Warren, Neil), username handle, or email address.
+              </p>
             </div>
           ) : (
             filteredContacts.map((contact) => {
