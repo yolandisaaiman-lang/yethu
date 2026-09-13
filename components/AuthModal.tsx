@@ -14,7 +14,6 @@ export default function AuthModal() {
     openAuthModal,
     login,
     signup,
-    loginDemo,
   } = useAuth();
 
   // Form states
@@ -318,40 +317,6 @@ export default function AuthModal() {
             )}
           </button>
         </form>
-
-        {/* One-Click Demo Profiles for Friction-Free Testing */}
-        <div className="mt-6 pt-5 border-t border-white/10">
-          <p className="text-[11px] font-semibold text-zinc-400 text-center mb-3">
-            Or test instantly with pre-loaded profiles:
-          </p>
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => loginDemo('nandi')}
-              className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-zinc-900 p-2.5 text-left hover:border-amber-500/40 hover:bg-zinc-850 transition-all group"
-            >
-              <span className="text-xl">🇿🇦</span>
-              <div className="overflow-hidden">
-                <p className="text-xs font-bold text-white group-hover:text-amber-400 transition-colors">
-                  Nandi (Creator)
-                </p>
-                <p className="text-[10px] text-zinc-500 truncate">isiZulu ➔ Kiswahili</p>
-              </div>
-            </button>
-
-            <button
-              onClick={() => loginDemo('kofi')}
-              className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-zinc-900 p-2.5 text-left hover:border-amber-500/40 hover:bg-zinc-850 transition-all group"
-            >
-              <span className="text-xl">🇬🇭</span>
-              <div className="overflow-hidden">
-                <p className="text-xs font-bold text-white group-hover:text-amber-400 transition-colors">
-                  Kofi (Streamer)
-                </p>
-                <p className="text-[10px] text-zinc-500 truncate">English ➔ isiXhosa</p>
-              </div>
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

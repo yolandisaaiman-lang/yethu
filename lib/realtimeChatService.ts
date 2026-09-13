@@ -96,6 +96,7 @@ class RealtimeChatService {
 
   /**
    * Loads saved conversations from localStorage or falls back to initialConversations.
+   * Automatically purges legacy dummy user accounts.
    */
   public loadStoredConversations(fallback: Conversation[]): Conversation[] {
     if (typeof window === 'undefined') return fallback;
@@ -104,7 +105,21 @@ class RealtimeChatService {
       if (stored) {
         const parsed: Conversation[] = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          const DUMMY_CONV_IDS = new Set(['conv_themba_direct', 'conv_kofi_direct', 'conv_amara_direct']);
+          const DUMMY_PARTICIPANTS = new Set(['themba', 'kofi', 'amara', 'fatou', 'juma', 'zola', 'aline', 'u_themba', 'u_kofi', 'u_amara']);
+          const DUMMY_TITLES = new Set(['Themba Khumalo', 'Kofi Mensah', 'Amara Balogun', 'Fatou Diop', 'Juma Kimani']);
+
+          const cleaned = parsed.filter(
+            (c) =>
+              !DUMMY_CONV_IDS.has(c.id) &&
+              (!c.participantId || !DUMMY_PARTICIPANTS.has(c.participantId)) &&
+              !DUMMY_TITLES.has(c.title)
+          );
+
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem(LOCAL_STORAGE_CHATS_KEY, JSON.stringify(cleaned));
+          }
+          return cleaned.length > 0 ? cleaned : fallback;
         }
       }
     } catch (e) {
@@ -119,104 +134,33 @@ class RealtimeChatService {
   public saveConversations(conversations: Conversation[]): void {
     if (typeof window === 'undefined') return;
     try {
-      localStorage.setItem(LOCAL_STORAGE_CHATS_KEY, JSON.stringify(conversations));
+      const DUMMY_CONV_IDS = new Set(['conv_themba_direct', 'conv_kofi_direct', 'conv_amara_direct']);
+      const DUMMY_PARTICIPANTS = new Set(['themba', 'kofi', 'amara', 'fatou', 'juma', 'zola', 'aline', 'u_themba', 'u_kofi', 'u_amara']);
+      const DUMMY_TITLES = new Set(['Themba Khumalo', 'Kofi Mensah', 'Amara Balogun', 'Fatou Diop', 'Juma Kimani']);
+
+      const cleaned = conversations.filter(
+        (c) =>
+          !DUMMY_CONV_IDS.has(c.id) &&
+          (!c.participantId || !DUMMY_PARTICIPANTS.has(c.participantId)) &&
+          !DUMMY_TITLES.has(c.title)
+      );
+
+      localStorage.setItem(LOCAL_STORAGE_CHATS_KEY, JSON.stringify(cleaned));
     } catch (e) {
       console.warn('Could not persist conversations to localStorage:', e);
     }
   }
 
   /**
-   * Simulates an intelligent, encrypted African peer reply for 1-on-1 chats.
+   * Real user messaging handler (simulation deprecated).
    */
   public scheduleSimulatedPeerReply(
-    conversation: Conversation,
-    userText: string,
-    onReply: (replyMsg: ChatMessage) => void,
-    onTypingState?: (isTyping: boolean) => void
+    _conversation: Conversation,
+    _userText: string,
+    _onReply: (replyMsg: ChatMessage) => void,
+    _onTypingState?: (isTyping: boolean) => void
   ) {
-    if (conversation.isGroup) return; // Only for 1-on-1 private chats
-
-    // Start typing after 1.2s
-    setTimeout(() => {
-      if (onTypingState) onTypingState(true);
-
-      this.broadcast({
-        type: 'TYPING',
-        conversationId: conversation.id,
-        userId: conversation.id,
-        userName: conversation.title,
-        isTyping: true,
-      });
-
-      // Reply after 2.8s
-      setTimeout(async () => {
-        if (onTypingState) onTypingState(false);
-
-        this.broadcast({
-          type: 'TYPING',
-          conversationId: conversation.id,
-          userId: conversation.id,
-          userName: conversation.title,
-          isTyping: false,
-        });
-
-        // Dynamic context-aware responses tailored to African languages and culture
-        let original = 'Yebo mngani wami! Ngiyezwa, sizokhuluma ngokushesha.';
-        let translated = 'Yes my friend! I hear you, we will speak shortly.';
-        let lang = conversation.primaryLanguage;
-
-        if (conversation.id.includes('themba')) {
-          if (userText.toLowerCase().includes('live') || userText.toLowerCase().includes('stream')) {
-            original = 'Kuhle kakhulu! Ngizolungisa ikhamera yami manje, asiqale i-120s live!';
-            translated = 'Great! I am setting up my camera right now, let us start the 120s live stream!';
-          } else {
-            original = 'Ngiyakuzwa mkhaya! Le ngxoxo yethu ivikelekile ngempela (AES-256).';
-            translated = 'I hear you brother! This chat of ours is truly encrypted (AES-256).';
-          }
-        } else if (conversation.id.includes('kofi')) {
-          original = 'Medaase paaa! The Accra creative energy is high. Let us connect today!';
-          translated = 'Thank you very much! The Accra creative energy is high. Let us connect today!';
-          lang = 'Twi / English';
-        } else if (conversation.id.includes('amara')) {
-          original = 'Ẹ ṣe gan-an! Lagos is vibrating with Afrobeats right now.';
-          translated = 'Thank you so much! Lagos is vibrating with Afrobeats right now.';
-          lang = 'Yorùbá';
-        } else if (conversation.id.includes('fatou')) {
-          original = 'Jerejef! Nous sommes connectés en direct depuis Dakar.';
-          translated = 'Thank you! We are connected live from Dakar.';
-          lang = 'Wolof / Français';
-        }
-
-        // Encrypt the message payload with AES-GCM 256-bit
-        const encryptedArmor = await encryptOneOnOneMessage(original, conversation.id);
-
-        const replyMessage: ChatMessage = {
-          id: `reply_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-          senderId: `peer_${conversation.id}`,
-          senderName: conversation.title,
-          senderHandle: `@${conversation.title.toLowerCase().replace(/\s+/g, '_')}`,
-          senderAvatar: conversation.avatar,
-          countryFlag: conversation.countryFlag,
-          sourceLanguage: lang,
-          originalText: original,
-          translatedText: translated,
-          targetLanguage: 'English',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          isMe: false,
-          isEncrypted: true,
-          encryptedPayload: encryptedArmor,
-          expiresIn: 'Expires in 48h 00m',
-        };
-
-        onReply(replyMessage);
-
-        this.broadcast({
-          type: 'NEW_MESSAGE',
-          conversationId: conversation.id,
-          message: replyMessage,
-        });
-      }, 2600);
-    }, 1200);
+    // Disabled: Only real authenticated users communicate on Yethu
   }
 }
 
