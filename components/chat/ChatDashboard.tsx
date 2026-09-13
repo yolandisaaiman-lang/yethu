@@ -29,6 +29,18 @@ export default function ChatDashboard() {
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
   const [isFindContactsModalOpen, setIsFindContactsModalOpen] = useState(false);
   const [pendingInvites, setPendingInvites] = useState<ChatInvite[]>([]);
+  const [realEncryptedContacts, setRealEncryptedContacts] = useState<any[]>([]);
+  const [isLoadingEncryptedContacts, setIsLoadingEncryptedContacts] = useState(false);
+
+  useEffect(() => {
+    if (isNewChatModalOpen) {
+      setIsLoadingEncryptedContacts(true);
+      contactInviteService.searchContacts('', user?.id, user?.email).then((res) => {
+        setRealEncryptedContacts(res);
+        setIsLoadingEncryptedContacts(false);
+      });
+    }
+  }, [isNewChatModalOpen, user?.id, user?.email]);
 
   // 1. Load stored conversations and stories after client mount
   useEffect(() => {
@@ -592,90 +604,74 @@ export default function ChatDashboard() {
             </div>
 
             <p className="text-xs text-zinc-400">
-              Select a verified creator or member across Africa to start a private, end-to-end encrypted conversation.
+              Select a verified member on Yethu to start a private, end-to-end encrypted conversation.
             </p>
 
             <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-              {[
-                {
-                  id: 'themba',
-                  name: 'Themba Khumalo',
-                  handle: '@themba_beats',
-                  avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=120&auto=format&fit=crop&q=80',
-                  countryFlag: '🇿🇦',
-                  countryName: 'South Africa',
-                  language: 'isiZulu',
-                  tagline: 'Amapiano producer & live host',
-                },
-                {
-                  id: 'kofi',
-                  name: 'Kofi Mensah',
-                  handle: '@kofi_accra',
-                  avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=120&auto=format&fit=crop&q=80',
-                  countryFlag: '🇬🇭',
-                  countryName: 'Ghana',
-                  language: 'Twi / English',
-                  tagline: 'Tech founder & Afro-fusion streamer',
-                },
-                {
-                  id: 'amara',
-                  name: 'Amara Balogun',
-                  handle: '@amara_lagos',
-                  avatar: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=120&auto=format&fit=crop&q=80',
-                  countryFlag: '🇳🇬',
-                  countryName: 'Nigeria',
-                  language: 'Yorùbá',
-                  tagline: 'Lagos creative arts & music',
-                },
-                {
-                  id: 'fatou',
-                  name: 'Fatou Diop',
-                  handle: '@fatou_dakar',
-                  avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
-                  countryFlag: '🇸🇳',
-                  countryName: 'Senegal',
-                  language: 'Wolof / Français',
-                  tagline: 'Dakar fashion & storytelling',
-                },
-                {
-                  id: 'juma',
-                  name: 'Juma Kimani',
-                  handle: '@juma_ke',
-                  avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=120&auto=format&fit=crop&q=80',
-                  countryFlag: '🇰🇪',
-                  countryName: 'Kenya',
-                  language: 'Kiswahili',
-                  tagline: 'Silicon Savannah WebRTC dev',
-                },
-              ].map((contact) => (
-                <div
-                  key={contact.id}
-                  onClick={() => handleStartDirectChat(contact)}
-                  className="flex items-center justify-between p-3 rounded-2xl bg-zinc-900/80 hover:bg-zinc-800/80 border border-white/5 hover:border-emerald-500/40 cursor-pointer transition-all"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="relative">
-                      <img
-                        src={contact.avatar}
-                        alt={contact.name}
-                        className="h-10 w-10 rounded-full object-cover border border-white/10"
-                      />
-                      <span className="absolute bottom-0 right-0 text-xs">{contact.countryFlag}</span>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-bold text-white">{contact.name}</span>
-                        <Lock className="h-2.5 w-2.5 text-emerald-400" />
-                      </div>
-                      <p className="text-[11px] text-zinc-400">{contact.tagline}</p>
-                    </div>
-                  </div>
-
-                  <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-                    {contact.language}
-                  </span>
+              {isLoadingEncryptedContacts ? (
+                <div className="flex flex-col items-center justify-center py-10 gap-2 text-zinc-400 text-xs">
+                  <div className="h-5 w-5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                  <span>Loading registered Yethu accounts...</span>
                 </div>
-              ))}
+              ) : realEncryptedContacts.length === 0 ? (
+                <div className="text-center py-8 px-4 text-xs space-y-3">
+                  <p className="font-semibold text-zinc-300">No other registered accounts found</p>
+                  <p className="text-zinc-500 max-w-xs mx-auto">
+                    Use the Discover Contacts tool to find real users and invite them to chat.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setIsNewChatModalOpen(false);
+                      setIsFindContactsModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-xl african-sunset-gradient px-4 py-2 text-xs font-bold text-white shadow"
+                  >
+                    <UserPlus className="h-3.5 w-3.5" />
+                    <span>Discover &amp; Invite Contacts</span>
+                  </button>
+                </div>
+              ) : (
+                realEncryptedContacts.map((contact) => (
+                  <div
+                    key={contact.id}
+                    onClick={() =>
+                      handleStartDirectChat({
+                        id: contact.id,
+                        name: contact.name,
+                        handle: contact.handle,
+                        avatar: contact.avatar,
+                        countryFlag: contact.countryFlag,
+                        countryName: contact.country,
+                        language: contact.language,
+                      })
+                    }
+                    className="flex items-center justify-between p-3 rounded-2xl bg-zinc-900/80 hover:bg-zinc-800/80 border border-white/5 hover:border-emerald-500/40 cursor-pointer transition-all"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <img
+                          src={contact.avatar}
+                          alt={contact.name}
+                          className="h-10 w-10 rounded-full object-cover border border-white/10"
+                        />
+                        <span className="absolute bottom-0 right-0 text-xs">{contact.countryFlag}</span>
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-white">{contact.name}</span>
+                          <span className="text-[11px] text-zinc-400 font-mono">{contact.handle}</span>
+                          <Lock className="h-2.5 w-2.5 text-emerald-400" />
+                        </div>
+                        <p className="text-[11px] text-zinc-400 line-clamp-1">{contact.bio || contact.email}</p>
+                      </div>
+                    </div>
+
+                    <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                      {contact.language}
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
