@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { INITIAL_CONVERSATIONS, INITIAL_STORIES, Conversation, ChatMessage, StoryItem } from '@/lib/chatData';
 import { realtimeChat } from '@/lib/realtimeChatService';
@@ -199,6 +199,109 @@ export default function ChatDashboard() {
     return () => unsubscribe();
   }, [activeConversationId, user]);
 
+  // 4. Database polling — guaranteed cross-device delivery every 3 seconds
+  //    Falls back to empty array if the table doesn't exist yet (graceful).
+  const lastFetchRef = useRef<Record<string, string>>({});
+
+  const pollMessages = useCallback(async () => {
+    if (!user || !activeConversationId || !activeConversationId.startsWith('dm_')) return;
+
+    const since =
+      lastFetchRef.current[activeConversationId] ||
+      new Date(Date.now() - 5 * 60 * 1000).toISOString(); // last 5 min on first load
+
+    try {
+      const res = await fetch(
+        `/api/chat/messages?conversationId=${encodeURIComponent(activeConversationId)}&since=${encodeURIComponent(since)}`
+      );
+      if (!res.ok) return;
+      const rows: any[] = await res.json();
+      if (!Array.isArray(rows) || rows.length === 0) return;
+
+      // Advance the cursor to now so we only fetch truly new messages next poll
+      lastFetchRef.current[activeConversationId] = new Date().toISOString();
+
+      const newMessages: ChatMessage[] = rows.map((row) => ({
+        id: row.id,
+        senderId: row.sender_id,
+        senderName: row.sender_name || row.sender_handle || 'Unknown',
+        senderHandle: row.sender_handle || '@unknown',
+        senderAvatar: row.sender_avatar || '',
+        countryFlag: row.country_flag || '🌍',
+        sourceLanguage: row.source_language || 'English',
+        originalText: row.original_text || '',
+        translatedText: row.translated_text || row.original_text || '',
+        targetLanguage: row.target_language || 'English',
+        timestamp: new Date(row.created_at).toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        isMe: row.sender_id === user.id,
+        isEncrypted: Boolean(row.is_encrypted),
+        encryptedPayload: row.encrypted_payload || undefined,
+        expiresIn: row.expires_in || 'Expires in 48h 00m',
+      }));
+
+      setConversations((prev) => {
+        const existingConv = prev.find((c) => c.id === activeConversationId);
+
+        if (existingConv) {
+          const existingIds = new Set(existingConv.messages.map((m) => m.id));
+          const toAdd = newMessages.filter((m) => !existingIds.has(m.id));
+          if (toAdd.length === 0) return prev;
+          const lastMsg = toAdd[toAdd.length - 1];
+          return prev.map((c) =>
+            c.id !== activeConversationId
+              ? c
+              : {
+                  ...c,
+                  messages: [...c.messages, ...toAdd],
+                  lastMessageSnippet: lastMsg.originalText,
+                  lastMessageTime: lastMsg.timestamp,
+                  unreadCount: 0,
+                }
+          );
+        }
+
+        // Auto-create conversation for first incoming message
+        const first = newMessages[0];
+        const senderHandle = first.senderHandle?.startsWith('@')
+          ? first.senderHandle
+          : `@${first.senderHandle || 'user'}`;
+
+        const autoConv: Conversation = {
+          id: activeConversationId,
+          title: senderHandle,
+          avatar:
+            first.senderAvatar ||
+            `https://ui-avatars.com/api/?name=${encodeURIComponent(first.senderName)}&background=random`,
+          isGroup: false,
+          countryFlag: first.countryFlag || '🌍',
+          countryName: '',
+          unreadCount: newMessages.filter((m) => !m.isMe).length,
+          lastMessageSnippet: newMessages[newMessages.length - 1].originalText,
+          lastMessageTime: newMessages[newMessages.length - 1].timestamp,
+          isLiveNow: false,
+          primaryLanguage: first.sourceLanguage || 'English',
+          isEncrypted: true,
+          participantId: first.senderId,
+          participantHandle: senderHandle,
+          messages: newMessages,
+        };
+        return [autoConv, ...prev];
+      });
+    } catch {
+      // Network error — will retry next interval
+    }
+  }, [activeConversationId, user]);
+
+  useEffect(() => {
+    if (!activeConversationId?.startsWith('dm_')) return;
+    pollMessages(); // immediate first fetch
+    const interval = setInterval(pollMessages, 3000);
+    return () => clearInterval(interval);
+  }, [pollMessages, activeConversationId]);
+
   // Sync stories to localStorage whenever updated
   useEffect(() => {
     try {
@@ -207,6 +310,7 @@ export default function ChatDashboard() {
       console.warn('Could not persist vault stories', e);
     }
   }, [stories]);
+
 
   const handleSaveLiveToVault = ({
     title,
@@ -319,12 +423,22 @@ export default function ChatDashboard() {
       })
     );
 
-    // Broadcast in real-time across tabs & InsForge Realtime
+    // Broadcast in real-time across tabs & InsForge Realtime (best-effort)
     realtimeChat.broadcast({
       type: 'NEW_MESSAGE',
       conversationId,
       message: newMessage,
     });
+
+    // Persist to InsForge database — this is what the other user polls every 3s
+    // Fire-and-forget: optimistic update already happened above
+    if (conversationId.startsWith('dm_')) {
+      fetch('/api/chat/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: newMessage, conversationId }),
+      }).catch((err) => console.warn('[Yethu] DB message save failed (will not affect local state):', err));
+    }
 
     // If 1-on-1 private chat, trigger intelligent simulated peer response
     if (targetConv && !targetConv.isGroup) {
