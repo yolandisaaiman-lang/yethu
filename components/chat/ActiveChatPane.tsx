@@ -24,18 +24,21 @@ import {
   KeyRound,
   X,
   LogOut,
+  ArrowLeft,
 } from 'lucide-react';
 
 interface ActiveChatPaneProps {
   conversation: Conversation;
   onSendMessage: (conversationId: string, text: string) => void;
   isPeerTyping?: boolean;
+  onBack?: () => void;
 }
 
 export default function ActiveChatPane({
   conversation,
   onSendMessage,
   isPeerTyping = false,
+  onBack,
 }: ActiveChatPaneProps) {
   const { user, openGoLiveModal, openWatchModal, logout } = useAuth();
   const [inputText, setInputText] = useState('');
@@ -83,6 +86,16 @@ export default function ActiveChatPane({
       {/* 1. Chat Header */}
       <div className="h-16 px-4 border-b border-white/10 bg-[#0c0e12]/90 backdrop-blur-md flex items-center justify-between z-10">
         <div className="flex items-center gap-3">
+          {/* Mobile-only back button */}
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="md:hidden flex items-center justify-center h-8 w-8 rounded-full text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors shrink-0"
+              aria-label="Back to conversations"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          )}
           <div className="relative">
             <img
               src={conversation.avatar}

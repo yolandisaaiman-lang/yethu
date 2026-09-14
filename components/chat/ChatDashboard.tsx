@@ -31,6 +31,8 @@ export default function ChatDashboard() {
   const [pendingInvites, setPendingInvites] = useState<ChatInvite[]>([]);
   const [realEncryptedContacts, setRealEncryptedContacts] = useState<any[]>([]);
   const [isLoadingEncryptedContacts, setIsLoadingEncryptedContacts] = useState(false);
+  // Mobile: 'list' shows conversation list, 'chat' shows active chat pane
+  const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
 
   useEffect(() => {
     if (isNewChatModalOpen) {
@@ -213,6 +215,7 @@ export default function ChatDashboard() {
 
   const handleSelectConversation = (id: string) => {
     setActiveConversationId(id);
+    setMobileView('chat'); // On mobile: switch from list to chat pane
     setConversations((prev) =>
       prev.map((c) => (c.id === id ? { ...c, unreadCount: 0 } : c))
     );
@@ -324,6 +327,7 @@ export default function ChatDashboard() {
     const existing = conversations.find((c) => c.id === `conv_${contact.id}`);
     if (existing) {
       setActiveConversationId(existing.id);
+      setMobileView('chat'); // On mobile: switch to chat pane
       setIsNewChatModalOpen(false);
       return;
     }
@@ -365,6 +369,7 @@ export default function ChatDashboard() {
 
     setConversations((prev) => [newDirectConv, ...prev]);
     setActiveConversationId(newDirectConv.id);
+    setMobileView('chat'); // On mobile: switch to chat pane
     setIsNewChatModalOpen(false);
   };
 
@@ -416,25 +421,30 @@ export default function ChatDashboard() {
           ))}
 
           <div className="flex-1 flex h-full overflow-hidden">
-            {/* Middle Pane: Chat List */}
-            <ChatListPane
-              conversations={conversations}
-              activeConversationId={activeConversationId}
-              onSelectConversation={handleSelectConversation}
-              stories={stories}
-              onSelectStory={(story) => setSelectedStory(story)}
-              onStartNewChat={() => setIsNewChatModalOpen(true)}
-              onOpenFindContacts={() => setIsFindContactsModalOpen(true)}
-              onStartDirectChat={handleStartDirectChat}
-              pendingInvitesCount={pendingInvites.length}
-            />
+            {/* Middle Pane: Chat List — hidden on mobile when viewing a chat */}
+            <div className={`${mobileView === 'chat' ? 'hidden md:flex' : 'flex'} w-full md:w-auto flex-col`}>
+              <ChatListPane
+                conversations={conversations}
+                activeConversationId={activeConversationId}
+                onSelectConversation={handleSelectConversation}
+                stories={stories}
+                onSelectStory={(story) => setSelectedStory(story)}
+                onStartNewChat={() => setIsNewChatModalOpen(true)}
+                onOpenFindContacts={() => setIsFindContactsModalOpen(true)}
+                onStartDirectChat={handleStartDirectChat}
+                pendingInvitesCount={pendingInvites.length}
+              />
+            </div>
 
-            {/* Right Pane: Active Chat Conversation */}
-            <ActiveChatPane
-              conversation={activeConversation}
-              onSendMessage={handleSendMessage}
-              isPeerTyping={Boolean(peerTypingMap[activeConversation.id])}
-            />
+            {/* Right Pane: Active Chat — hidden on mobile when viewing list */}
+            <div className={`${mobileView === 'list' ? 'hidden md:flex' : 'flex'} flex-1 flex-col h-full overflow-hidden`}>
+              <ActiveChatPane
+                conversation={activeConversation}
+                onSendMessage={handleSendMessage}
+                isPeerTyping={Boolean(peerTypingMap[activeConversation.id])}
+                onBack={() => setMobileView('list')}
+              />
+            </div>
           </div>
         </div>
       )}
