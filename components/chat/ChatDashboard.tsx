@@ -51,8 +51,18 @@ export default function ChatDashboard() {
       const savedStories = localStorage.getItem('yethu_vault_stories');
       if (savedStories) {
         const parsed = JSON.parse(savedStories);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setStories(parsed);
+        if (Array.isArray(parsed)) {
+          const DUMMY_STORY_IDS = new Set(['st_1', 'st_2', 'st_3', 'st_4']);
+          const DUMMY_STORY_NAMES = new Set(['Themba', 'Zainab', 'Chidi', 'Amina', 'Themba Khumalo', 'Kofi Mensah', 'Amara Balogun']);
+          const cleaned = parsed.filter(
+            (s: any) => !DUMMY_STORY_IDS.has(s?.id) && !DUMMY_STORY_NAMES.has(s?.creatorName)
+          );
+          localStorage.setItem('yethu_vault_stories', JSON.stringify(cleaned));
+          if (cleaned.length > 0) {
+            setStories(cleaned);
+          } else {
+            setStories(INITIAL_STORIES);
+          }
         }
       }
     } catch (e) {
@@ -415,6 +425,7 @@ export default function ChatDashboard() {
               onSelectStory={(story) => setSelectedStory(story)}
               onStartNewChat={() => setIsNewChatModalOpen(true)}
               onOpenFindContacts={() => setIsFindContactsModalOpen(true)}
+              onStartDirectChat={handleStartDirectChat}
               pendingInvitesCount={pendingInvites.length}
             />
 
@@ -580,6 +591,18 @@ export default function ChatDashboard() {
       <FindContactsModal
         isOpen={isFindContactsModalOpen}
         onClose={() => setIsFindContactsModalOpen(false)}
+        onStartChat={(c) => {
+          handleStartDirectChat({
+            id: c.id,
+            name: c.name,
+            handle: c.handle,
+            avatar: c.avatar,
+            countryFlag: c.countryFlag,
+            countryName: c.country,
+            language: c.language,
+          });
+          setIsFindContactsModalOpen(false);
+        }}
       />
 
       {/* 9. Start New 1-on-1 Encrypted Chat Modal */}

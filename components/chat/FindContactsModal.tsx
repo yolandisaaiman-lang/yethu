@@ -24,12 +24,14 @@ interface FindContactsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectExistingChat?: (contactId: string) => void;
+  onStartChat?: (contact: DiscoverableContact) => void;
 }
 
 export default function FindContactsModal({
   isOpen,
   onClose,
   onSelectExistingChat,
+  onStartChat,
 }: FindContactsModalProps) {
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
@@ -263,6 +265,16 @@ export default function FindContactsModal({
                     </div>
 
                     <div className="shrink-0 flex items-center gap-2 sm:self-center">
+                      {onStartChat && (
+                        <button
+                          onClick={() => onStartChat(contact)}
+                          className="flex items-center gap-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/40 px-3.5 py-2 text-xs font-bold transition-all active:scale-95 cursor-pointer"
+                          title="Start Direct 1-on-1 Encrypted Chat"
+                        >
+                          <MessageSquare className="h-3.5 w-3.5" />
+                          <span>Chat</span>
+                        </button>
+                      )}
                       {isSent ? (
                         <span className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 px-3.5 py-2 text-xs font-bold text-emerald-400">
                           <Check className="h-4 w-4" />

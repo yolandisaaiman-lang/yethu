@@ -31,10 +31,8 @@ export async function GET(request: NextRequest) {
 
     const cleanQuery = rawQuery.replace(/^@/, '').toLowerCase();
 
-    // Query InsForge /api/auth/users
-    const insforgeUrl = cleanQuery
-      ? `${baseUrl}/api/auth/users?search=${encodeURIComponent(cleanQuery)}`
-      : `${baseUrl}/api/auth/users`;
+    // Query InsForge /api/auth/users (up to 100 users)
+    const insforgeUrl = `${baseUrl}/api/auth/users?limit=100`;
 
     let rawUsers: any[] = [];
 

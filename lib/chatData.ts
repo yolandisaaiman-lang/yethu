@@ -65,42 +65,6 @@ export const INITIAL_STORIES: StoryItem[] = [
     previewImage: '',
     hasUnseen: false,
   },
-  {
-    id: 'st_1',
-    creatorName: 'Themba',
-    creatorAvatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100&auto=format&fit=crop&q=80',
-    countryFlag: '🇿🇦',
-    timeRemaining: '14h 22m',
-    previewImage: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400&auto=format&fit=crop&q=80',
-    hasUnseen: true,
-  },
-  {
-    id: 'st_2',
-    creatorName: 'Zainab',
-    creatorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
-    countryFlag: '🇸🇳',
-    timeRemaining: '6h 40m',
-    previewImage: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400&auto=format&fit=crop&q=80',
-    hasUnseen: true,
-  },
-  {
-    id: 'st_3',
-    creatorName: 'Chidi',
-    creatorAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80',
-    countryFlag: '🇳🇬',
-    timeRemaining: '29h 10m',
-    previewImage: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=400&auto=format&fit=crop&q=80',
-    hasUnseen: false,
-  },
-  {
-    id: 'st_4',
-    creatorName: 'Amina',
-    creatorAvatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100&auto=format&fit=crop&q=80',
-    countryFlag: '🇰🇪',
-    timeRemaining: '2h 15m',
-    previewImage: 'https://images.unsplash.com/photo-1502680390469-be75c86b636f?w=400&auto=format&fit=crop&q=80',
-    hasUnseen: true,
-  },
 ];
 
 export const INITIAL_CONVERSATIONS: Conversation[] = [
