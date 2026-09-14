@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Conversation, ChatMessage } from '@/lib/chatData';
 import { useAuth } from '@/context/AuthContext';
 import { getConversationSecurityFingerprint } from '@/lib/crypto';
+import { realtimeChat } from '@/lib/realtimeChatService';
 import {
   Send,
   Mic,
@@ -62,9 +63,19 @@ export default function ActiveChatPane({
     }
   }, [conversation.id, conversation.isEncrypted]);
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setInputText(val);
+    if (user && val.trim()) {
+      realtimeChat.broadcastTyping(conversation.id, user.id, user.name);
+    }
+  };
+
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim()) return;
+    // Clear the typing indicator immediately when sending
+    if (user) realtimeChat.clearTyping(conversation.id, user.id, user.name);
     onSendMessage(conversation.id, inputText.trim());
     setInputText('');
   };
@@ -368,7 +379,7 @@ export default function ActiveChatPane({
           <input
             type="text"
             value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
+            onChange={handleInputChange}
             placeholder={`Type in ${user?.nativeLanguage || 'your language'} (auto-translates for everyone)...`}
             className="flex-1 rounded-xl bg-zinc-900 border border-white/10 px-4 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-400 transition-colors"
           />

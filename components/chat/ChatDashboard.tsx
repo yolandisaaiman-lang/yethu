@@ -147,6 +147,8 @@ export default function ChatDashboard() {
           })
         );
       } else if (event.type === 'TYPING') {
+        // Ignore typing events from ourselves
+        if (event.userId === user?.id) return;
         setPeerTypingMap((prev) => ({
           ...prev,
           [event.conversationId]: event.isTyping,
@@ -155,7 +157,7 @@ export default function ChatDashboard() {
     });
 
     return () => unsubscribe();
-  }, [activeConversationId]);
+  }, [activeConversationId, user]);
 
   // Sync stories to localStorage whenever updated
   useEffect(() => {
