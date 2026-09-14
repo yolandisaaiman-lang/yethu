@@ -1,45 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const INSFORGE_URL = (process.env.NEXT_PUBLIC_INSFORGE_URL || 'https://7rniavv5.us-east.insforge.app').replace(/\/$/, '');
-const INSFORGE_KEY = process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY || 'ik_fbe25dbdbcb2578a0bc8213c1f388426';
+import { chatAdmin, isConversationMember, requireChatUser } from '@/lib/server/chatAuth';
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const conversationId = searchParams.get('conversationId');
+    const all = searchParams.get('all') === 'true';
     const since = searchParams.get('since') || new Date(Date.now() - 120_000).toISOString(); // default last 2 min
 
-    if (!conversationId) {
+    if (!conversationId && !all) {
       return NextResponse.json({ error: 'conversationId required' }, { status: 400 });
     }
-
-    // PostgREST query: chat_messages where conversation_id=X AND created_at>since, ordered ascending
-    const url = new URL(`${INSFORGE_URL}/api/database/records/chat_messages`);
-    url.searchParams.set('conversation_id', `eq.${conversationId}`);
-    url.searchParams.set('created_at', `gt.${since}`);
-    url.searchParams.set('order', 'created_at.asc');
-    url.searchParams.set('limit', '100');
-
-    const res = await fetch(url.toString(), {
-      headers: {
-        'Authorization': `Bearer ${INSFORGE_KEY}`,
-        'apikey': INSFORGE_KEY,
-        'Accept': 'application/json',
-      },
-      // Don't cache — always fetch fresh
-      cache: 'no-store',
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      console.warn('[chat/messages] InsForge DB fetch error:', res.status, err);
-      return NextResponse.json([], { status: 200 }); // Return empty so client doesn't break
+    const user = await requireChatUser(req.headers.get('authorization'));
+    if (!user || (conversationId && !isConversationMember(conversationId, user.id))) {
+      return NextResponse.json({ error: 'Unauthorized conversation access' }, { status: 401 });
     }
 
-    const rows = await res.json();
-    return NextResponse.json(Array.isArray(rows) ? rows : []);
+    let query = chatAdmin().database.from('chat_messages').select('*').gt('created_at', since).order('created_at', { ascending: true }).limit(100);
+    query = conversationId
+      ? query.eq('conversation_id', conversationId)
+      : query.like('conversation_id', `dm_%${user.id}%`);
+    const { data, error } = await query;
+    if (error) throw error;
+    return NextResponse.json(data || []);
   } catch (e: any) {
     console.error('[chat/messages] Unexpected error:', e);
-    return NextResponse.json([], { status: 200 });
+    return NextResponse.json({ error: e?.message || 'Could not load messages' }, { status: 500 });
   }
 }

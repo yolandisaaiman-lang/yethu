@@ -7,10 +7,7 @@ import { encryptOneOnOneMessage, decryptOneOnOneMessage, isEncryptedMessage } fr
 const LOCAL_STORAGE_CHATS_KEY = 'yethu_conversations_v1';
 const BROADCAST_CHANNEL_NAME = 'yethu_realtime_chats';
 
-// The single InsForge realtime channel every Yethu user subscribes to.
-// Per-conversation isolation is handled by the conversationId inside the payload.
-const INSFORGE_CHANNEL = 'yethu_chat_v1';
-const INSFORGE_EVENT = 'chat:event';
+const INSFORGE_EVENT = 'new_message';
 
 export type RealtimeChatEvent =
   | { type: 'NEW_MESSAGE'; conversationId: string; message: ChatMessage }
@@ -47,20 +44,13 @@ class RealtimeChatService {
       // 1. Connect the WebSocket
       await insforge.realtime.connect();
 
-      // 2. Subscribe to the shared Yethu chat channel
-      const result = await insforge.realtime.subscribe(INSFORGE_CHANNEL);
-      if (!result.ok) {
-        console.warn('[Yethu Realtime] Channel subscribe failed:', result.error);
-        return;
-      }
-
-      // 3. Listen for inbound events from other devices
+      // Conversation channels are subscribed by the dashboard after auth.
       insforge.realtime.on(INSFORGE_EVENT, (payload: any) => {
         if (payload) this.notifyListeners(payload as RealtimeChatEvent);
       });
 
       this.isConnected = true;
-      console.info('[Yethu Realtime] Connected ✓ channel:', INSFORGE_CHANNEL);
+      console.info('[Yethu Realtime] Connected');
     } catch (e) {
       console.info('[Yethu Realtime] Falling back to BroadcastChannel only:', e);
     }
@@ -90,17 +80,30 @@ class RealtimeChatService {
       console.warn('[Yethu Realtime] BroadcastChannel post failed:', e);
     }
 
-    // 3. Push cross-device via InsForge WebSocket
-    if (this.isConnected && insforge?.realtime) {
-      try {
-        await insforge.realtime.publish(INSFORGE_CHANNEL, INSFORGE_EVENT, event);
-      } catch (err) {
-        console.warn('[Yethu Realtime] InsForge publish failed (will retry on next message):', err);
-        // Attempt reconnect for next time
-        this.isConnected = false;
-        this.connectPromise = this.initInsForge();
-      }
-    }
+    // Database INSERT triggers publish durable messages to InsForge Realtime.
+  }
+
+  public async watchConversation(conversationId: string): Promise<void> {
+    if (!conversationId.startsWith('dm_')) return;
+    await (this.connectPromise || this.initInsForge());
+    if (!this.isConnected || !insforge?.realtime) return;
+    const channel = `chat:${conversationId}`;
+    if (insforge.realtime.getSubscribedChannels().includes(channel)) return;
+    const result = await insforge.realtime.subscribe(channel);
+    if (!result.ok) console.warn('[Yethu Realtime] Conversation subscribe failed:', result.error);
+  }
+
+  public unwatchConversation(conversationId: string): void {
+    insforge?.realtime?.unsubscribe(`chat:${conversationId}`);
+  }
+
+  public async watchInbox(userId: string): Promise<void> {
+    await (this.connectPromise || this.initInsForge());
+    if (!this.isConnected || !insforge?.realtime) return;
+    const channel = `inbox:${userId}`;
+    if (insforge.realtime.getSubscribedChannels().includes(channel)) return;
+    const result = await insforge.realtime.subscribe(channel);
+    if (!result.ok) console.warn('[Yethu Realtime] Inbox subscribe failed:', result.error);
   }
 
   // ── Typing indicator helpers ─────────────────────────────────────────────

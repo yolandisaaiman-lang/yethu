@@ -1,7 +1,7 @@
 import { createClient } from '@insforge/sdk';
 
-const baseUrl = process.env.NEXT_PUBLIC_INSFORGE_URL || 'https://7rniavv5.us-east.insforge.app';
-const anonKey = process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY || 'ik_fbe25dbdbcb2578a0bc8213c1f388426';
+const baseUrl = process.env.NEXT_PUBLIC_INSFORGE_URL;
+const anonKey = process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY;
 
 export const insforge = createClient({
   baseUrl,
@@ -96,13 +96,23 @@ export const authService = {
         autoConfirm: true,
       });
 
-      if (error && !error.message?.includes('already exists')) {
+      if (error || !data?.user?.id) {
         console.warn('InsForge auth signUp notice:', error.message);
         return { user: null, error: error.message };
       }
 
+      // A profile is not an authenticated session. Establish a session now so
+      // the new account can use protected chat routes and Realtime immediately.
+      const { data: session, error: sessionError } = await insforge.auth.signInWithPassword({
+        email: normalizedEmail,
+        password: params.password,
+      });
+      if (sessionError || !session?.user?.id) {
+        return { user: null, error: sessionError?.message || 'Account created, but sign-in did not complete.' };
+      }
+
       const userProfile: UserProfile = {
-        id: data?.user?.id || `usr_${Date.now()}`,
+        id: session.user.id,
         email: normalizedEmail,
         name: params.name,
         handle: formattedHandle,
@@ -122,27 +132,7 @@ export const authService = {
 
       return { user: userProfile, error: null };
     } catch (err: any) {
-      console.warn('InsForge signUp fallback triggered:', err);
-      const fallbackUser: UserProfile = {
-        id: `usr_${Date.now()}`,
-        email: normalizedEmail,
-        name: params.name,
-        handle: formattedHandle,
-        nativeLanguage: params.nativeLanguage,
-        targetLanguage: params.targetLanguage,
-        country: params.country || 'South Africa',
-        countryCode: params.countryCode || 'ZA',
-        bio: 'Afropolitan creator on Yethu Live.',
-        isCreator: true,
-        createdAt: new Date().toISOString(),
-      };
-
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(fallbackUser));
-        saveStoredAccount(normalizedEmail, fallbackUser, params.password);
-      }
-
-      return { user: fallbackUser, error: null };
+      return { user: null, error: err?.message || 'Could not create your account' };
     }
   },
 
@@ -201,34 +191,7 @@ export const authService = {
         (error as any)?.statusCode === 403;
 
       if (isVerificationIssue) {
-        console.info('InsForge credentials verified; completing authentication session.');
-
-        const userName =
-          stored?.user?.name ||
-          normalizedEmail.split('@')[0].replace(/[._-]/g, ' ');
-        const capitalizedName =
-          userName.charAt(0).toUpperCase() + userName.slice(1);
-
-        const userProfile: UserProfile = stored?.user || {
-          id: `usr_${normalizedEmail.replace(/[^a-zA-Z0-9]/g, '_')}`,
-          email: normalizedEmail,
-          name: capitalizedName,
-          handle: `@${normalizedEmail.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_')}`,
-          nativeLanguage: 'isiXhosa',
-          targetLanguage: 'English',
-          country: 'South Africa',
-          countryCode: 'ZA',
-          bio: 'Afropolitan creator on Yethu Live.',
-          isCreator: true,
-          createdAt: new Date().toISOString(),
-        };
-
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(userProfile));
-          saveStoredAccount(normalizedEmail, userProfile, params.password);
-        }
-
-        return { user: userProfile, error: null };
+        return { user: null, error: 'Please verify your email before signing in.' };
       }
 
       // 3. If credentials were invalid (HTTP 401)
@@ -236,25 +199,9 @@ export const authService = {
         return { user: null, error: 'Invalid email or password. Please check your credentials.' };
       }
 
-      // 4. Other error / network outage: Check if this user was registered locally
-      if (stored && stored.password === params.password) {
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(stored.user));
-        }
-        return { user: stored.user, error: null };
-      }
-
       return { user: null, error: error?.message || 'Failed to sign in. Please check your credentials.' };
     } catch (err: any) {
       console.warn('InsForge signIn exception:', err);
-
-      // Fallback: Check local store
-      if (stored && (!stored.password || stored.password === params.password)) {
-        if (typeof window !== 'undefined') {
-          localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(stored.user));
-        }
-        return { user: stored.user, error: null };
-      }
 
       return { user: null, error: err?.message || 'Authentication error. Please try again.' };
     }
@@ -270,6 +217,35 @@ export const authService = {
         localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
       }
     }
+  },
+
+  async getAuthenticatedUser(): Promise<UserProfile | null> {
+    const { data, error } = await insforge.auth.getCurrentUser();
+    if (error || !data.user?.id) {
+      if (typeof window !== 'undefined') localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
+      return null;
+    }
+
+    const stored = authService.getCurrentLocalUser();
+    const account = getStoredAccounts()[data.user.email?.toLowerCase() || '']?.user;
+    const profile = stored?.id === data.user.id ? stored : account?.id === data.user.id ? account : undefined;
+    const name = profile?.name || (data.user as any).profile?.name || data.user.email?.split('@')[0] || 'Yethu User';
+    const user: UserProfile = {
+      id: data.user.id,
+      email: data.user.email || profile?.email || '',
+      name,
+      handle: profile?.handle || `@${name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')}`,
+      nativeLanguage: profile?.nativeLanguage || 'English',
+      targetLanguage: profile?.targetLanguage || 'English',
+      country: profile?.country || 'South Africa',
+      countryCode: profile?.countryCode || 'ZA',
+      bio: profile?.bio || 'Afropolitan creator on Yethu Live.',
+      avatarUrl: profile?.avatarUrl,
+      isCreator: true,
+      createdAt: profile?.createdAt,
+    };
+    if (typeof window !== 'undefined') localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(user));
+    return user;
   },
 
   async saveProfile(userId: string, updates: Partial<UserProfile>): Promise<{ success: boolean; error?: string }> {

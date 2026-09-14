@@ -99,12 +99,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   } | null>(null);
 
   useEffect(() => {
-    // Load local user on mount
-    const current = authService.getCurrentLocalUser();
-    if (current) {
-      setUser(current);
-    }
-    setIsLoading(false);
+    let active = true;
+    // A local profile is display metadata only. The SDK session is the source
+    // of truth for user identity, protected routes, and Realtime.
+    void authService.getAuthenticatedUser().then((current) => {
+      if (active) {
+        setUser(current);
+        setIsLoading(false);
+      }
+    });
+    return () => { active = false; };
   }, []);
 
   const openAuthModal = (tab: 'signin' | 'signup' = 'signup') => {

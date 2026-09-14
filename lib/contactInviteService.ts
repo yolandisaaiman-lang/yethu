@@ -1,5 +1,7 @@
 'use client';
 
+import { insforge } from './insforge';
+
 export interface DiscoverableContact {
   id: string;
   name: string;
@@ -242,7 +244,10 @@ class ContactInviteService {
         ? `${qParam}${uidParam}${emailParam}`
         : `?${(uidParam + emailParam).replace(/^&/, '')}`;
 
-      const res = await fetch(`/api/users/search${queryStr}`, { cache: 'no-store' });
+      const res = await fetch(`/api/users/search${queryStr}`, {
+        cache: 'no-store',
+        headers: { Authorization: insforge.getHttpClient().getHeaders().Authorization || '' },
+      });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data?.users)) {

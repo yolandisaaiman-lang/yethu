@@ -42,6 +42,10 @@ next-env.d.ts
 
 # InsForge & AI agent skills
 .insforge
+!.insforge/
+.insforge/*
+!.insforge/migrations/
+!.insforge/migrations/*.sql
 .agent
 .agents
 .augment

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { INITIAL_CONVERSATIONS, INITIAL_STORIES, Conversation, ChatMessage, StoryItem } from '@/lib/chatData';
 import { realtimeChat } from '@/lib/realtimeChatService';
+import { insforge } from '@/lib/insforge';
 import { encryptOneOnOneMessage } from '@/lib/crypto';
 import AppRail from './AppRail';
 import ChatListPane from './ChatListPane';
@@ -31,6 +32,7 @@ export default function ChatDashboard() {
   const [pendingInvites, setPendingInvites] = useState<ChatInvite[]>([]);
   const [realEncryptedContacts, setRealEncryptedContacts] = useState<any[]>([]);
   const [isLoadingEncryptedContacts, setIsLoadingEncryptedContacts] = useState(false);
+  const inboxCursorRef = useRef<string>(new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString());
   // Mobile: 'list' shows conversation list, 'chat' shows active chat pane
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
 
@@ -197,6 +199,66 @@ export default function ChatDashboard() {
     });
 
     return () => unsubscribe();
+  }, [activeConversationId, user]);
+
+  // Reconcile the authenticated inbox after a reconnect/backgrounded tab. This
+  // remains a bounded recovery path; normal delivery is the Realtime trigger.
+  useEffect(() => {
+    if (!user) return;
+    let stopped = false;
+    const syncInbox = async () => {
+      try {
+        const response = await fetch(
+          `/api/chat/messages?all=true&since=${encodeURIComponent(inboxCursorRef.current)}`,
+          { headers: { Authorization: insforge.getHttpClient().getHeaders().Authorization || '' } }
+        );
+        if (!response.ok) return;
+        const rows: any[] = await response.json();
+        if (!Array.isArray(rows) || stopped) return;
+        rows.forEach((row) => {
+          realtimeChat.broadcast({
+            type: 'NEW_MESSAGE',
+            conversationId: row.conversation_id,
+            message: {
+              id: row.id,
+              senderId: row.sender_id,
+              senderName: row.sender_name || row.sender_handle || 'Unknown',
+              senderHandle: row.sender_handle || '@unknown',
+              senderAvatar: row.sender_avatar || '',
+              countryFlag: row.country_flag || '🌍',
+              sourceLanguage: row.source_language || 'English',
+              originalText: row.original_text || '',
+              translatedText: row.translated_text || row.original_text || '',
+              targetLanguage: row.target_language || 'English',
+              timestamp: new Date(row.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              isMe: row.sender_id === user.id,
+              isEncrypted: Boolean(row.is_encrypted),
+              encryptedPayload: row.encrypted_payload || undefined,
+              expiresIn: row.expires_in || 'Expires in 48h 00m',
+            },
+          });
+        });
+        // Advance to the newest durable record, including an empty successful
+        // read, so subsequent recovery probes stay small and bounded.
+        inboxCursorRef.current = rows.length
+          ? rows.reduce((latest, row) => row.created_at > latest ? row.created_at : latest, rows[0].created_at)
+          : new Date().toISOString();
+      } catch {
+        // The next bounded reconciliation will retry after a transient outage.
+      }
+    };
+    void syncInbox();
+    const interval = window.setInterval(syncInbox, 15_000);
+    return () => { stopped = true; window.clearInterval(interval); };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    void realtimeChat.watchInbox(user.id);
+    if (activeConversationId.startsWith('dm_')) void realtimeChat.watchConversation(activeConversationId);
+    return () => {
+      if (activeConversationId.startsWith('dm_')) realtimeChat.unwatchConversation(activeConversationId);
+    };
   }, [activeConversationId, user]);
 
   // 4. Database polling — guaranteed cross-device delivery every 3 seconds
@@ -391,7 +453,7 @@ export default function ChatDashboard() {
     }
 
     const newMessage: ChatMessage = {
-      id: `msg_${Date.now()}`,
+      id: crypto.randomUUID(),
       senderId: user.id,
       senderName: user.name,
       senderHandle: user.handle,
@@ -433,11 +495,18 @@ export default function ChatDashboard() {
     // Persist to InsForge database — this is what the other user polls every 3s
     // Fire-and-forget: optimistic update already happened above
     if (conversationId.startsWith('dm_')) {
-      fetch('/api/chat/send', {
+      const response = await fetch('/api/chat/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: insforge.getHttpClient().getHeaders().Authorization || '',
+        },
         body: JSON.stringify({ message: newMessage, conversationId }),
-      }).catch((err) => console.warn('[Yethu] DB message save failed (will not affect local state):', err));
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || 'Message could not be delivered');
+      }
     }
 
     // If 1-on-1 private chat, trigger intelligent simulated peer response

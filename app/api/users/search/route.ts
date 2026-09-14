@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireChatUser } from '@/lib/server/chatAuth';
 
-const baseUrl = process.env.NEXT_PUBLIC_INSFORGE_URL || 'https://7rniavv5.us-east.insforge.app';
-const anonKey = process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY || 'ik_fbe25dbdbcb2578a0bc8213c1f388426';
+const baseUrl = process.env.INSFORGE_URL || process.env.NEXT_PUBLIC_INSFORGE_URL;
+const apiKey = process.env.INSFORGE_API_KEY;
 
 function getCountryFlag(countryCode?: string): string {
   switch (countryCode?.toUpperCase()) {
@@ -24,6 +25,9 @@ function getCountryFlag(countryCode?: string): string {
 
 export async function GET(request: NextRequest) {
   try {
+    const currentUser = await requireChatUser(request.headers.get('authorization'));
+    if (!currentUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!baseUrl || !apiKey) throw new Error('InsForge server environment is not configured');
     const { searchParams } = new URL(request.url);
     const rawQuery = (searchParams.get('q') || '').trim();
     const currentUserId = (searchParams.get('currentUserId') || '').trim();
@@ -43,8 +47,8 @@ export async function GET(request: NextRequest) {
       const response = await fetch(insforgeUrl, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${anonKey}`,
-          'apikey': anonKey,
+        'Authorization': `Bearer ${apiKey}`,
+        'apikey': apiKey,
           'Content-Type': 'application/json',
         },
         signal: controller.signal,

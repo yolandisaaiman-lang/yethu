@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const INSFORGE_URL = (process.env.NEXT_PUBLIC_INSFORGE_URL || 'https://7rniavv5.us-east.insforge.app').replace(/\/$/, '');
-const INSFORGE_KEY = process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY || 'ik_fbe25dbdbcb2578a0bc8213c1f388426';
+import { chatAdmin, isConversationMember, requireChatUser } from '@/lib/server/chatAuth';
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,6 +11,10 @@ export async function POST(req: NextRequest) {
 
     if (!message?.id || !conversationId) {
       return NextResponse.json({ error: 'Missing message or conversationId' }, { status: 400 });
+    }
+    const user = await requireChatUser(req.headers.get('authorization'));
+    if (!user || !isConversationMember(conversationId, user.id) || message.senderId !== user.id) {
+      return NextResponse.json({ error: 'Unauthorized message sender' }, { status: 401 });
     }
 
     const row = {
@@ -33,23 +35,8 @@ export async function POST(req: NextRequest) {
       // created_at is set by the DB default (NOW())
     };
 
-    const res = await fetch(`${INSFORGE_URL}/api/database/records/chat_messages`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${INSFORGE_KEY}`,
-        'apikey': INSFORGE_KEY,
-        'Prefer': 'return=minimal',
-      },
-      body: JSON.stringify([row]),
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      console.error('[chat/send] InsForge DB error:', res.status, err);
-      // Return 200 anyway so the client optimistic update still works
-      return NextResponse.json({ ok: false, dbError: err });
-    }
+    const { error } = await chatAdmin().database.from('chat_messages').insert([row]);
+    if (error) throw error;
 
     return NextResponse.json({ ok: true });
   } catch (e: any) {
