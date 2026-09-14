@@ -128,24 +128,64 @@ export default function ChatDashboard() {
   useEffect(() => {
     const unsubscribe = realtimeChat.subscribe((event) => {
       if (event.type === 'NEW_MESSAGE') {
-        setConversations((prev) =>
-          prev.map((c) => {
-            if (c.id === event.conversationId) {
-              // Avoid duplicate messages
-              if (c.messages.some((m) => m.id === event.message.id)) {
-                return c;
-              }
+        const incomingMsg = event.message;
+
+        // ── Normalize isMe: the sender tagged it true for themselves,
+        //    but the receiver must see it as false (their message, not ours).
+        const normalizedMsg = {
+          ...incomingMsg,
+          isMe: incomingMsg.senderId === user?.id,
+        };
+
+        setConversations((prev) => {
+          const existingConv = prev.find((c) => c.id === event.conversationId);
+
+          if (existingConv) {
+            // Conversation already in list — just append the message (dedup by ID)
+            if (existingConv.messages.some((m) => m.id === normalizedMsg.id)) {
+              return prev; // already applied (optimistic update)
+            }
+            return prev.map((c) => {
+              if (c.id !== event.conversationId) return c;
               return {
                 ...c,
-                lastMessageSnippet: event.message.originalText,
-                lastMessageTime: event.message.timestamp,
+                lastMessageSnippet: normalizedMsg.originalText,
+                lastMessageTime: normalizedMsg.timestamp,
                 unreadCount: c.id === activeConversationId ? 0 : c.unreadCount + 1,
-                messages: [...c.messages, event.message],
+                messages: [...c.messages, normalizedMsg],
               };
-            }
-            return c;
-          })
-        );
+            });
+          }
+
+          // ── Conversation NOT in list yet (receiver hasn't opened this DM) ──
+          // Auto-create it so the incoming message is visible immediately.
+          if (event.conversationId.startsWith('dm_') && normalizedMsg.senderId !== user?.id) {
+            const senderHandle = normalizedMsg.senderHandle?.startsWith('@')
+              ? normalizedMsg.senderHandle
+              : `@${normalizedMsg.senderHandle || 'user'}`;
+
+            const autoConv: Conversation = {
+              id: event.conversationId,
+              title: senderHandle,
+              avatar: normalizedMsg.senderAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(normalizedMsg.senderName)}&background=random`,
+              isGroup: false,
+              countryFlag: normalizedMsg.countryFlag || '🌍',
+              countryName: '',
+              unreadCount: 1,
+              lastMessageSnippet: normalizedMsg.originalText,
+              lastMessageTime: normalizedMsg.timestamp,
+              isLiveNow: false,
+              primaryLanguage: normalizedMsg.sourceLanguage || 'English',
+              isEncrypted: true,
+              participantId: normalizedMsg.senderId,
+              participantHandle: senderHandle,
+              messages: [normalizedMsg],
+            };
+            return [autoConv, ...prev];
+          }
+
+          return prev;
+        });
       } else if (event.type === 'TYPING') {
         // Ignore typing events from ourselves
         if (event.userId === user?.id) return;
@@ -326,40 +366,49 @@ export default function ChatDashboard() {
     countryName: string;
     language: string;
   }) => {
-    const existing = conversations.find((c) => c.id === `conv_${contact.id}`);
+    if (!user) return;
+
+    // ── Symmetric conversation ID: same for both participants regardless of who initiates ──
+    // Sorting ensures Warren→Neil and Neil→Warren produce the exact same conv ID.
+    const convId = `dm_${[user.id, contact.id].sort().join('_')}`;
+
+    // Check both new symmetric format and legacy format
+    const existing = conversations.find((c) => c.id === convId || c.id === `conv_${contact.id}`);
     if (existing) {
       setActiveConversationId(existing.id);
-      setMobileView('chat'); // On mobile: switch to chat pane
+      setMobileView('chat');
       setIsNewChatModalOpen(false);
       return;
     }
 
+    const displayHandle = contact.handle.startsWith('@') ? contact.handle : `@${contact.handle}`;
+
     const newDirectConv: Conversation = {
-      id: `conv_${contact.id}`,
-      title: contact.name,
+      id: convId,
+      title: displayHandle,       // Show @username, not real name
       avatar: contact.avatar,
       isGroup: false,
       countryFlag: contact.countryFlag,
       countryName: contact.countryName,
       unreadCount: 0,
-      lastMessageSnippet: 'End-to-End Encrypted chat initialized (AES-256)',
+      lastMessageSnippet: '🔒 End-to-End Encrypted · AES-256',
       lastMessageTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       isLiveNow: false,
       primaryLanguage: contact.language,
       isEncrypted: true,
       participantId: contact.id,
-      participantHandle: contact.handle,
+      participantHandle: displayHandle,
       messages: [
         {
-          id: `init_${Date.now()}`,
-          senderId: contact.id,
-          senderName: contact.name,
-          senderHandle: contact.handle,
-          senderAvatar: contact.avatar,
-          countryFlag: contact.countryFlag,
-          sourceLanguage: contact.language,
-          originalText: `Sawubona! This private 1-on-1 chat is secured with client-side AES-256 end-to-end encryption.`,
-          translatedText: `Hello! This private 1-on-1 chat is secured with client-side AES-256 end-to-end encryption.`,
+          id: `init_${convId}`,
+          senderId: 'system',
+          senderName: 'Yethu',
+          senderHandle: '@yethu',
+          senderAvatar: '',
+          countryFlag: '🔒',
+          sourceLanguage: 'English',
+          originalText: `This private 1-on-1 chat is secured with AES-GCM-256 end-to-end encryption. Only you and ${displayHandle} can read these messages.`,
+          translatedText: `This private 1-on-1 chat is secured with AES-GCM-256 end-to-end encryption. Only you and ${displayHandle} can read these messages.`,
           targetLanguage: 'English',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           isMe: false,
@@ -371,7 +420,7 @@ export default function ChatDashboard() {
 
     setConversations((prev) => [newDirectConv, ...prev]);
     setActiveConversationId(newDirectConv.id);
-    setMobileView('chat'); // On mobile: switch to chat pane
+    setMobileView('chat');
     setIsNewChatModalOpen(false);
   };
 

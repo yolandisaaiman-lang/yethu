@@ -293,8 +293,8 @@ export default function ChatListPane({
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-bold text-white truncate">{u.name}</span>
-                            <span className="text-[11px] text-zinc-400 font-mono truncate">{u.handle}</span>
+                            <span className="text-xs font-bold text-amber-400 truncate font-mono">{u.handle}</span>
+                            <span className="text-[11px] text-zinc-400 truncate">{u.name}</span>
                           </div>
                           <p className="text-[10px] text-zinc-500 truncate">{u.language} • {u.country}</p>
                         </div>
